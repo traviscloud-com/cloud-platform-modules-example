@@ -1,6 +1,6 @@
-# Consumed by modules/local-cluster. cloud-platform-infra-example keeps its own
-# copy of this module, whose outputs are a cross-stack contract (keyvault
-# mock_outputs in its live/_envcommon/aks-spoke.hcl); keep the shapes in sync.
+# Consumed by modules/local-cluster, and a cross-stack contract: keep the
+# shapes in sync with the keyvault mock_outputs in units/aks-spoke/terragrunt.hcl
+# of cloud-platform-catalog-example.
 
 output "name" {
   description = "Key Vault name."

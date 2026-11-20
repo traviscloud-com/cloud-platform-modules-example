@@ -22,6 +22,9 @@ Plain Terraform modules (no Terragrunt inside) extracted from
 | `service-principal` | Entra ID application + service principal with a Terraform-rotated client secret. |
 | `key-vault` | Azure Key Vault (AVM-based) with RBAC access. |
 | `github-actions-identity` | Entra ID identity with federated (OIDC) credentials for GitHub Actions. |
+| `hub` | Regional hub: VNet (AVM hub networking) with optional firewall, DNS private resolver, bastion and hub-to-hub peering. |
+| `aks-spoke` | One AKS stamp: spoke VNet (IPAM or static) peered to the hub, AKS, workload identities for external-dns / cert-manager / External Secrets, optional ACR and monitoring. Composes `workload-identity`. |
+| `workload-identity` | User-assigned managed identity federated to one Kubernetes service account, with role assignments. |
 
 See each module's `README.md` for inputs and outputs.
 
@@ -52,8 +55,9 @@ module "key_vault" {
 ```
 
 `local-cluster` calls its siblings through relative sources
-(`../service-principal`, `../key-vault`, `../github-actions-identity`), so consumers MUST use the
-double-slash form `//modules/local-cluster` so the whole repo is fetched and
+(`../service-principal`, `../key-vault`, `../github-actions-identity`), and
+`aks-spoke` calls `../workload-identity`, so consumers MUST use the
+double-slash form (`//modules/local-cluster`, `//modules/aks-spoke`) so the whole repo is fetched and
 the relative paths resolve:
 
 ```hcl
@@ -61,7 +65,7 @@ source = "git::https://github.com/traviscloud-com/cloud-platform-modules-example
 ```
 
 Note that the siblings resolve from the same checkout, i.e. at the
-`local-cluster` tag, not at their own tags.
+caller's tag (`local-cluster/...`, `aks-spoke/...`), not at their own tags.
 
 ## Running checks locally
 

@@ -1,0 +1,150 @@
+variable "environment" {
+  description = "Environment name (e.g. dev, prod). Used in resource names."
+  type        = string
+}
+
+variable "region_short" {
+  description = "Short region code used in resource names (e.g. wus3, eus2)."
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for the hub resources."
+  type        = string
+}
+
+variable "address_space" {
+  description = "Address space of the hub virtual network (a /22 is plenty)."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.address_space) > 0
+    error_message = "address_space must contain at least one CIDR."
+  }
+}
+
+variable "enable_firewall" {
+  description = <<DESC
+Deploy an Azure Firewall in the hub. Disabled by default: even the Basic SKU
+costs ~$300/month. When disabled the hub is just a peered virtual network,
+and spokes egress directly through their AKS load balancer.
+DESC
+  type        = bool
+  default     = false
+}
+
+variable "firewall_sku_tier" {
+  description = "Azure Firewall SKU tier when enable_firewall is true. Basic is the cheapest (~$300/mo vs ~$900/mo for Standard)."
+  type        = string
+  default     = "Basic"
+
+  validation {
+    condition     = contains(["Basic", "Standard", "Premium"], var.firewall_sku_tier)
+    error_message = "firewall_sku_tier must be Basic, Standard, or Premium."
+  }
+}
+
+variable "firewall_subnet_prefix" {
+  description = "CIDR for AzureFirewallSubnet. Defaults to the first /26 of the hub address space."
+  type        = string
+  default     = null
+}
+
+variable "firewall_management_subnet_prefix" {
+  description = "CIDR for AzureFirewallManagementSubnet (required by the Basic SKU). Defaults to the second /26 of the hub address space."
+  type        = string
+  default     = null
+}
+
+variable "firewall_route_entries" {
+  description = <<DESC
+Extra routes for the firewall subnet's route table. Used for hub-to-hub
+transit: point each remote spoke CIDR at the remote hub's firewall private IP.
+DESC
+  type = set(object({
+    name                = string
+    address_prefix      = string
+    next_hop_ip_address = string
+  }))
+  default = []
+}
+
+variable "peer_hub" {
+  description = <<DESC
+Optional global VNet peering to another hub (both directions are created, so
+define this on exactly ONE of the two hubs). Peering alone does not make
+spoke-to-spoke traffic flow - that also needs firewalls and UDRs; see
+docs/architecture.md.
+DESC
+  type = object({
+    vnet_id             = string
+    vnet_name           = string
+    resource_group_name = string
+  })
+  default = null
+}
+
+variable "transit_cidrs" {
+  description = "Source/destination CIDRs the firewall allows to transit between hubs and spokes."
+  type        = list(string)
+  default     = ["10.0.0.0/8"]
+}
+
+variable "aks_egress_via_firewall" {
+  description = "Add the AKS required-egress rule collection (FQDN tag AzureKubernetesService, tunnel/NTP network rules, registries) to the firewall policy. Needed when this environment's stamps use outbound_type = userDefinedRouting. No effect without enable_firewall."
+  type        = bool
+  default     = false
+}
+
+variable "enable_dns_resolver" {
+  description = "Deploy an Azure DNS Private Resolver with an inbound endpoint in the hub (~$180/mo per hub) so on-prem/VPN clients can resolve the environment's private DNS zone. Not needed for stamp-to-stamp resolution inside Azure."
+  type        = bool
+  default     = false
+}
+
+variable "dns_inbound_subnet_prefix" {
+  description = "CIDR for the resolver inbound endpoint subnet (min /28). Defaults to .0.128/28 of the hub range."
+  type        = string
+  default     = null
+}
+
+variable "private_dns_zone_id" {
+  description = "Resource ID of the environment's central private DNS zone (modules/platform-network). When set, the hub VNet is linked to it so the resolver inbound endpoint can answer for it."
+  type        = string
+  default     = null
+}
+
+variable "enable_bastion" {
+  description = "Deploy Azure Bastion in the hub for reaching private clusters/jumpboxes. Basic ~$140/mo; Developer is free but region-limited and has no SKU features."
+  type        = bool
+  default     = false
+}
+
+variable "bastion_sku" {
+  description = "Bastion SKU: Developer (free, no dedicated subnet, limited regions), Basic, Standard or Premium."
+  type        = string
+  default     = "Basic"
+
+  validation {
+    condition     = contains(["Developer", "Basic", "Standard", "Premium"], var.bastion_sku)
+    error_message = "bastion_sku must be Developer, Basic, Standard or Premium."
+  }
+}
+
+variable "bastion_subnet_prefix" {
+  description = "CIDR for AzureBastionSubnet (min /26). Defaults to .0.192/26 of the hub range."
+  type        = string
+  default     = null
+}
+
+variable "enable_telemetry" {
+  description = "Enable AVM module telemetry. Off by default: no phone-home from this platform."
+  type        = bool
+  default     = false
+}
+
+variable "tags" {
+  description = "Tags applied to all hub resources."
+  type        = map(string)
+  default     = {}
+}

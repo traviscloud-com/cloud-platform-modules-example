@@ -7,7 +7,7 @@
 #   operator   placeholder created here, real value set once by a human with
 #              `az keyvault secret set`; Terraform ignores it afterwards
 # Readers (Key Vault Secrets User) are granted by whoever creates the
-# consuming identity: modules/aks-spoke (cloud-platform-infra-example) for AKS,
+# consuming identity: modules/aks-spoke for AKS,
 # modules/local-cluster for a local cluster; plus the plan pipeline identity,
 # which refreshes secret state. Writers (Secrets Officer) are the applying
 # principal and the deploy pipeline identity.
