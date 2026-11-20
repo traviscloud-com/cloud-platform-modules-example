@@ -1,0 +1,20 @@
+# Gitleaks configuration - extends the default ruleset.
+# Public repo: no real credentials, subscription IDs,
+# or tenant IDs may ever be committed. Only documented placeholders are allowed.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented placeholder values used in examples and docs; downloaded provider/module code"
+# Vendor code pulled by terraform init (gitignored, never committed) - AVM
+# helper modules ship test fixtures with fake keys that trip generic rules.
+paths = [
+  '''(^|/)\.terraform/''',
+]
+regexes = [
+  # The all-zeros GUID used as a placeholder in examples, tests and docs
+  '''00000000-0000-0000-0000-000000000000''',
+  # RFC 5737 documentation IP range used in examples
+  '''203\.0\.113\.\d{1,3}''',
+]

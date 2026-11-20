@@ -1,0 +1,99 @@
+# Static checks that need no Azure credentials at all.
+# Secret scanning lives in gitleaks.yml.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TERRAFORM_VERSION: 1.15.8
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find.outputs.modules }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - id: find
+        run: |
+          modules=$(find modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | jq -R . | jq -sc .)
+          echo "modules=${modules}" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover.outputs.modules) }}
+    env:
+      MODULE: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Install pinned tools (tflint)
+        run: |
+          scripts/install-tools.sh tflint
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive "modules/${MODULE}"
+
+      - name: terraform validate
+        run: |
+          terraform -chdir="modules/${MODULE}" init -backend=false -input=false
+          terraform -chdir="modules/${MODULE}" validate
+
+      - name: tflint
+        # tflint --init downloads the azurerm ruleset from GitHub releases;
+        # unauthenticated runner IPs hit the API rate limit.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
+          tflint --config "$GITHUB_WORKSPACE/.tflint.hcl" --chdir "modules/${MODULE}"
+
+      - name: terraform test
+        run: |
+          if [ -d "modules/${MODULE}/tests" ]; then
+            terraform -chdir="modules/${MODULE}" test
+          else
+            echo "No tests/ directory for ${MODULE}; skipping."
+          fi
+
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned tools (trivy, terraform-docs)
+        run: |
+          scripts/install-tools.sh trivy terraform-docs
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: trivy config scan
+        run: scripts/lint.sh trivy
+
+      - name: module READMEs are current (terraform-docs)
+        run: scripts/lint.sh docs-check

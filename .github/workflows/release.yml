@@ -1,0 +1,59 @@
+# Tags a single module as <module>/<version> on the current main commit and
+# creates a GitHub release with generated notes.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "Module directory name under modules/ (e.g. key-vault)"
+        required: true
+        type: string
+      version:
+        description: "Semver version with leading v (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write   # push the tag, create the release
+    env:
+      MODULE: ${{ inputs.module }}
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # credentials stay: the next step pushes the tag
+          fetch-depth: 0
+
+      - name: Validate inputs
+        run: |
+          if ! [[ "$MODULE" =~ ^[a-z0-9][a-z0-9-]*$ ]] || [ ! -d "modules/${MODULE}" ]; then
+            echo "::error::modules/${MODULE} does not exist"; exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::version '${VERSION}' is not semver (vX.Y.Z)"; exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/${MODULE}/${VERSION}" > /dev/null; then
+            echo "::error::tag ${MODULE}/${VERSION} already exists"; exit 1
+          fi
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${MODULE}/${VERSION}" -m "${MODULE} ${VERSION}"
+          git push origin "refs/tags/${MODULE}/${VERSION}"
+
+      - name: Create GitHub release
+        run: |
+          gh release create "${MODULE}/${VERSION}" \
+            --title "${MODULE} ${VERSION}" \
+            --generate-notes \
+            --verify-tag

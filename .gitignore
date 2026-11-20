@@ -1,0 +1,27 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+.tflint.d/
+
+# Local environment - NEVER commit secrets, state or real tfvars
+.env
+*.tfvars
+!*.example.tfvars
+!examples/**/*.example.tfvars
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.env.bak*
